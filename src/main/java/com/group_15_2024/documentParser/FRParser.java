@@ -15,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 
 public class FRParser {
 
+    private static final int BATCH_COMMIT_SIZE = 100; // Number of documents to process before committing
+
     /**
      * Parses and indexes Federal Register documents from the specified path.
      *
@@ -48,6 +50,8 @@ public class FRParser {
             }
         }
 
+        // Final commit after processing all directories
+        writer.commit();
         System.out.println("Successfully indexed " + totalDocuments + " Federal Register documents.");
     }
 
@@ -82,12 +86,17 @@ public class FRParser {
 
                 writer.addDocument(createDocument(docno, text, title));
                 count++;
+
+                // Commit in batches for performance
+                if (count % BATCH_COMMIT_SIZE == 0) {
+                    writer.commit();
+                    System.out.println("Committed batch of " + BATCH_COMMIT_SIZE + " documents.");
+                }
             } catch (Exception e) {
                 System.err.println("Error processing document in file: " + file.getName() + " - " + e.getMessage());
             }
         }
 
-        writer.commit(); // Commit after processing the file
         return count;
     }
 
@@ -101,9 +110,23 @@ public class FRParser {
      */
     private static Document createDocument(String docno, String text, String title) {
         Document doc = new Document();
-        doc.add(new StringField("docno", docno, Field.Store.YES));  // Field for exact matches
-        doc.add(new TextField("text", text, Field.Store.YES));      // Field for full-text search
-        doc.add(new TextField("headline", title, Field.Store.YES)); // Field for full-text search
+
+        // Add fields to the Lucene Document
+        if (docno != null && !docno.isEmpty()) {
+            doc.add(new StringField("docno", docno, Field.Store.YES)); // Exact match field
+        } else {
+            System.err.println("Document missing DOCNO, skipping.");
+            return null; // Skip documents without a DOCNO
+        }
+
+        if (title != null && !title.isEmpty()) {
+            doc.add(new TextField("headline", title, Field.Store.YES)); // Full-text search field
+        }
+
+        if (text != null && !text.isEmpty()) {
+            doc.add(new TextField("text", text, Field.Store.YES)); // Full-text search field
+        }
+
         System.out.println("Added document with DOCNO: " + docno);
         return doc;
     }

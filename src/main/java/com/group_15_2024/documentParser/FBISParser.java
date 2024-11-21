@@ -13,6 +13,9 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
 
 public class FBISParser {
 
@@ -31,17 +34,23 @@ public class FBISParser {
             throw new IOException("FBIS directory not found: " + fbisDirectory);
         }
 
-        Files.list(dir).filter(Files::isRegularFile).forEach(file -> {
-            String fileName = file.getFileName().toString();
-            if (shouldIgnoreFile(fileName)) {
-                return;
-            }
-            try (BufferedReader br = Files.newBufferedReader(file)) {
-                processDocument(br, writer);
-            } catch (IOException e) {
-                System.err.println("Error processing file: " + fileName + " - " + e.getMessage());
-            }
-        });
+        List<String> skippedFiles = new ArrayList<>();
+        try (Stream<Path> files = Files.list(dir)) {
+            files.filter(Files::isRegularFile)
+                 .filter(file -> !shouldIgnoreFile(file.getFileName().toString()))
+                 .forEach(file -> {
+                     try (BufferedReader br = Files.newBufferedReader(file)) {
+                         processDocument(br, writer);
+                     } catch (IOException e) {
+                         skippedFiles.add(file.getFileName() + ": " + e.getMessage());
+                     }
+                 });
+        }
+
+        if (!skippedFiles.isEmpty()) {
+            System.err.println("Skipped files:");
+            skippedFiles.forEach(System.err::println);
+        }
     }
 
     /**
@@ -70,6 +79,9 @@ public class FBISParser {
         String fileContent = readFile(br);
         org.jsoup.nodes.Document document = Jsoup.parse(fileContent);
         Elements docElements = document.getElementsByTag("DOC");
+        List<String> skippedDocs = new ArrayList<>();
+
+        int batchCounter = 0;
 
         for (Element doc : docElements) {
             try {
@@ -79,17 +91,26 @@ public class FBISParser {
                 fbisData.setText(trimData(doc, FBISTags.TEXT));
 
                 if (fbisData.getDocNum() == null) {
-                    System.err.println("Skipping document without DOCNO.");
+                    skippedDocs.add("Document without DOCNO");
                     continue;
                 }
 
                 writer.addDocument(createFBISDocument(fbisData));
+                batchCounter++;
+
+                if (batchCounter % 100 == 0) { // Commit every 100 documents
+                    writer.commit();
+                }
             } catch (Exception e) {
-                System.err.println("Error processing document: " + e.getMessage());
+                skippedDocs.add("Error processing document: " + e.getMessage());
             }
         }
 
-        writer.commit(); // Commit after processing each file
+        writer.commit(); // Final commit
+        if (!skippedDocs.isEmpty()) {
+            System.err.println("Skipped documents:");
+            skippedDocs.forEach(System.err::println);
+        }
     }
 
     /**
@@ -100,13 +121,13 @@ public class FBISParser {
      * @return The trimmed data, or null if the tag is not found.
      */
     private static String trimData(Element doc, FBISTags tag) {
-        Elements elements = doc.getElementsByTag(tag.name().toLowerCase());
+        Elements elements = doc.getElementsByTag(tag.getTagName());
         if (elements.isEmpty()) {
-            return null; // Return null if the tag is not found
+            return null;
         }
         Elements tmpElements = elements.clone();
         removeNestedTags(tmpElements, tag);
-        String data = tmpElements.text(); // Extract text without nested tags
+        String data = tmpElements.text();
         return data != null ? data.trim() : null;
     }
 
@@ -119,7 +140,7 @@ public class FBISParser {
     private static void removeNestedTags(Elements elements, FBISTags currTag) {
         for (FBISTags tag : FBISTags.values()) {
             if (!tag.equals(currTag)) {
-                elements.select(tag.name().toLowerCase()).remove();
+                elements.select(tag.getTagName()).remove();
             }
         }
     }
@@ -139,7 +160,6 @@ public class FBISParser {
         if (fbisData.getText() != null) {
             document.add(new TextField("text", fbisData.getText(), Field.Store.YES));
         }
-        System.out.println("Added document with DOCNO: " + fbisData.getDocNum());
         return document;
     }
 
@@ -154,7 +174,7 @@ public class FBISParser {
         StringBuilder sb = new StringBuilder();
         String line;
         while ((line = br.readLine()) != null) {
-            sb.append(line).append("\n");
+            sb.append(line).append('\n');
         }
         return sb.toString();
     }
@@ -195,5 +215,9 @@ public class FBISParser {
      */
     enum FBISTags {
         HEADER, TEXT, ABS, AU, DATE1, DOC, DOCNO, H1, H2, H3, H4, H5, H6, H7, H8, HT, TR, TXT5, TI;
+
+        public String getTagName() {
+            return name().toLowerCase();
+        }
     }
 }

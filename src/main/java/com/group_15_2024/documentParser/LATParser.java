@@ -15,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 
 public class LATParser {
 
+    private static final int BATCH_COMMIT_SIZE = 100; // Commit after every 100 documents
+
     /**
      * Loads and parses LA Times documents from the specified directory and writes them to the IndexWriter.
      *
@@ -40,11 +42,19 @@ public class LATParser {
             try {
                 int docsParsed = parseLATimesFile(file, writer);
                 totalDocuments += docsParsed;
+
+                // Commit in batches for better performance
+                if (totalDocuments % BATCH_COMMIT_SIZE == 0) {
+                    writer.commit();
+                    System.out.println("Committed " + totalDocuments + " documents so far.");
+                }
             } catch (Exception e) {
                 System.err.println("Error processing file: " + file.getName() + " - " + e.getMessage());
             }
         }
 
+        // Final commit for any remaining documents
+        writer.commit();
         System.out.println("Successfully indexed " + totalDocuments + " documents from LA Times files.");
     }
 
@@ -71,9 +81,10 @@ public class LATParser {
         // For each DOC element, extract the relevant fields and add to IndexWriter
         for (Element doc : docs) {
             String docNo = extractElementText(doc, "DOCNO");
-            String headline = extractElementText(doc.selectFirst("HEADLINE"), "P");
-            String text = extractElementText(doc.selectFirst("TEXT"), "P");
+            String headline = extractElementText(doc, "HEADLINE > P");
+            String text = extractElementText(doc, "TEXT > P");
 
+            // Skip documents without essential fields
             if (docNo.isEmpty() && headline.isEmpty() && text.isEmpty()) {
                 System.out.println("Skipping empty document in file: " + file.getName());
                 continue;
@@ -83,23 +94,22 @@ public class LATParser {
             count++;
         }
 
-        writer.commit(); // Commit after processing each file
         return count;
     }
 
     /**
-     * Safely extracts text from an element.
+     * Safely extracts text from an element using a CSS query.
      *
-     * @param element The element to extract text from.
-     * @param tag     The tag to look for within the element.
-     * @return The extracted text, or an empty string if the element or tag is missing.
+     * @param parentElement The parent element to extract from.
+     * @param cssQuery      The CSS query to locate the target element(s).
+     * @return The extracted text, or an empty string if the element is missing or empty.
      */
-    private static String extractElementText(Element element, String tag) {
-        if (element == null) {
+    private static String extractElementText(Element parentElement, String cssQuery) {
+        if (parentElement == null) {
             return "";
         }
-        Elements tagElements = element.select(tag);
-        return tagElements != null ? tagElements.text().trim() : "";
+        Elements elements = parentElement.select(cssQuery);
+        return elements.isEmpty() ? "" : elements.text().trim();
     }
 
     /**
@@ -112,9 +122,19 @@ public class LATParser {
      */
     private static Document createDocument(String docNo, String headline, String text) {
         Document document = new Document();
-        document.add(new StringField("docno", docNo, Field.Store.YES));  // Field for exact matches
-        document.add(new TextField("headline", headline, Field.Store.YES));  // Field for full-text search
-        document.add(new TextField("text", text, Field.Store.YES));  // Field for full-text search
+
+        if (!docNo.isEmpty()) {
+            document.add(new StringField("docno", docNo, Field.Store.YES));  // Field for exact matches
+        }
+
+        if (!headline.isEmpty()) {
+            document.add(new TextField("headline", headline, Field.Store.YES));  // Field for full-text search
+        }
+
+        if (!text.isEmpty()) {
+            document.add(new TextField("text", text, Field.Store.YES));  // Field for full-text search
+        }
+
         return document;
     }
 }

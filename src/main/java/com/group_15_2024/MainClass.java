@@ -16,8 +16,8 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
 import org.apache.lucene.queryparser.classic.ParseException;
-import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.queryparser.classic.QueryParser;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,15 +30,14 @@ import java.util.List;
 
 public class MainClass {
 
-    private static final Path currentRelativePath = Paths.get("").toAbsolutePath();
-    private static final String INDEX_PATH = currentRelativePath + "/Index";
-    private static final String FIN_TIMES_PATH = currentRelativePath + "/Documents/Assignment Two/ft";
-    private static final String FED_REGISTER_PATH = currentRelativePath + "/Documents/Assignment Two/fr94";
-    private static final String LA_TIMES_PATH = currentRelativePath + "/Documents/Assignment Two/latimes";
-    private static final String FBIS_PATH = currentRelativePath + "/Documents/Assignment Two/fbis";
-    private static final String RESULTS_PATH = currentRelativePath + "/queryResults";
-
-    private static final int MAX_RETURN_RESULTS = 100; // Limit query results to save memory
+    private static final Path CURRENT_PATH = Paths.get("").toAbsolutePath();
+    private static final String INDEX_PATH = CURRENT_PATH + "/Index";
+    private static final String FIN_TIMES_PATH = CURRENT_PATH + "/Documents/Assignment Two/ft";
+    private static final String FED_REGISTER_PATH = CURRENT_PATH + "/Documents/Assignment Two/fr94";
+    private static final String LA_TIMES_PATH = CURRENT_PATH + "/Documents/Assignment Two/latimes";
+    private static final String FBIS_PATH = CURRENT_PATH + "/Documents/Assignment Two/fbis";
+    private static final String RESULTS_PATH = CURRENT_PATH + "/queryResults";
+    private static final int MAX_RESULTS = 100;
 
     public static void main(String[] args) {
         if (args.length < 2) {
@@ -50,47 +49,36 @@ public class MainClass {
         String rankingModel = args[0];
         String analyzerType = args[1];
 
-        System.out.println("Using Ranking Model: " + rankingModel);
-        System.out.println("Using Analyzer: " + analyzerType);
+        System.out.printf("Using Ranking Model: %s, Analyzer: %s%n", rankingModel, analyzerType);
 
-        Similarity similarityModel = RankAndAnalyzers.callSetRankingModel(rankingModel);
+        Similarity similarity = RankAndAnalyzers.callSetRankingModel(rankingModel);
         Analyzer analyzer = RankAndAnalyzers.callSetAnalyzer(analyzerType);
 
         try {
             logSystemUsage("Before Execution");
 
-            System.out.println("Checking if index directory exists...");
-            // Delete existing index directory if it exists
-            if (Files.exists(Paths.get(INDEX_PATH))) {
-                System.out.println("Index directory found. Deleting existing directory...");
-                deleteDirectory(new File(INDEX_PATH));
-                System.out.println("Existing index directory deleted.");
-            } else {
-                System.out.println("No existing index directory found.");
-            }
+            // Delete existing index directory
+            cleanIndexDirectory();
 
             // Create index and execute queries
             try (Directory directory = FSDirectory.open(Paths.get(INDEX_PATH))) {
-                System.out.println("Starting indexing process...");
-                createIndex(directory, similarityModel, analyzer);
+                createIndex(directory, similarity, analyzer);
                 logSystemUsage("After Indexing");
-                System.out.println("Indexing process completed.");
 
-                System.out.println("Starting query execution...");
-                executeQueries(directory, similarityModel, analyzer);
+                executeQueries(directory, similarity, analyzer);
                 logSystemUsage("After Query Execution");
-                System.out.println("Query execution completed.");
             }
 
         } catch (IOException | ParseException e) {
+            System.err.printf("Error: %s%n", e.getMessage());
             e.printStackTrace();
         }
     }
 
-    private static void createIndex(Directory directory, Similarity similarityModel, Analyzer analyzer) {
+    private static void createIndex(Directory directory, Similarity similarity, Analyzer analyzer) {
         try (IndexWriter writer = new IndexWriter(directory, new IndexWriterConfig(analyzer)
-                .setSimilarity(similarityModel)
-                .setRAMBufferSizeMB(16))) { // Limit RAM buffer size to 16 MB
+                .setSimilarity(similarity)
+                .setRAMBufferSizeMB(16))) {
 
             System.out.println("Indexing Financial Times documents...");
             FTParser.loadFinTimesDocs(FIN_TIMES_PATH, writer);
@@ -104,108 +92,91 @@ public class MainClass {
             System.out.println("Indexing FBIS documents...");
             FBISParser.loadFBISDocs(FBIS_PATH, writer);
 
-            System.out.println("All documents loaded and indexed successfully.");
+            System.out.println("Indexing completed successfully.");
 
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.printf("Error during indexing: %s%n", e.getMessage());
         }
     }
 
-    private static void executeQueries(Directory directory, Similarity similarityModel, Analyzer analyzer) throws ParseException {
-        try (IndexReader indexReader = DirectoryReader.open(directory);
+    private static void executeQueries(Directory directory, Similarity similarity, Analyzer analyzer) throws IOException, ParseException {
+        try (IndexReader reader = DirectoryReader.open(directory);
              PrintWriter writer = new PrintWriter(RESULTS_PATH, "UTF-8")) {
 
-            System.out.println("Total documents in index: " + indexReader.numDocs());
+            System.out.printf("Total documents in index: %d%n", reader.numDocs());
 
-            IndexSearcher indexSearcher = new IndexSearcher(indexReader);
-            indexSearcher.setSimilarity(similarityModel);
+            IndexSearcher searcher = new IndexSearcher(reader);
+            searcher.setSimilarity(similarity);
 
-            QueryParser queryParser = new MultiFieldQueryParser(new String[]{"headline", "text"}, analyzer);
-            List<QueryObject> loadedQueries = loadQueriesFromFile();
+            QueryParser parser = new MultiFieldQueryParser(new String[]{"headline", "text"}, analyzer);
+            List<QueryObject> queries = loadQueriesFromFile();
 
-            System.out.println("Number of queries loaded: " + loadedQueries.size());
+            System.out.printf("Loaded %d queries.%n", queries.size());
 
-            for (QueryObject queryData : loadedQueries) {
-                processQuery(queryData, indexSearcher, queryParser, writer);
-                System.out.println("Processed query: " + queryData.getQueryNum());
+            for (QueryObject query : queries) {
+                processQuery(query, searcher, parser, writer);
+                System.out.printf("Processed query: %s%n", query.getQueryNum());
             }
 
-            System.out.println("Queries executed successfully.");
-
-        } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("Query execution completed successfully.");
         }
     }
 
-    private static void processQuery(QueryObject queryData, IndexSearcher indexSearcher, QueryParser queryParser, PrintWriter writer) throws ParseException, IOException {
+    private static void processQuery(QueryObject query, IndexSearcher searcher, QueryParser parser, PrintWriter writer) throws ParseException, IOException {
         BooleanQuery.Builder booleanQuery = new BooleanQuery.Builder();
 
-        // Construct query
-        Query titleQuery = queryParser.parse(QueryParser.escape(queryData.getTitle()));
+        Query titleQuery = parser.parse(QueryParser.escape(query.getTitle()));
         booleanQuery.add(new BoostQuery(titleQuery, 4.0f), BooleanClause.Occur.SHOULD);
 
-        Query descQuery = queryParser.parse(QueryParser.escape(queryData.getDescription()));
+        Query descQuery = parser.parse(QueryParser.escape(query.getDescription()));
         booleanQuery.add(new BoostQuery(descQuery, 2.0f), BooleanClause.Occur.SHOULD);
 
-        Query finalQuery = booleanQuery.build();
+        TopDocs results = searcher.search(booleanQuery.build(), MAX_RESULTS);
 
-        // Search results
-        TopDocs topDocs = indexSearcher.search(finalQuery, MAX_RETURN_RESULTS);
-        int rank = 0; // Start ranking from 0
-
-        for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
-            Document doc = indexSearcher.doc(scoreDoc.doc);
-
-            // Get the document number (docno)
+        int rank = 0;
+        for (ScoreDoc scoreDoc : results.scoreDocs) {
+            Document doc = searcher.doc(scoreDoc.doc);
             String docno = doc.get("docno");
+
             if (docno == null) {
-                System.err.println("Document without docno found, skipping.");
+                System.err.println("Skipping document without docno.");
                 continue;
             }
 
-            // Write results in the required format
-            writer.printf("%s 0 %s %d %.6f 0%n",
-                    queryData.getQueryNum(),  // <query_id>
-                    docno,                   // <docno>
-                    rank,                    // <rank>
-                    scoreDoc.score           // <score>
-            );
-
-            rank++; // Increment rank
+            writer.printf("%s 0 %s %d %.6f 0%n", query.getQueryNum(), docno, rank, scoreDoc.score);
+            rank++;
         }
     }
 
-    private static void deleteDirectory(File directory) throws IOException {
-        if (directory.isDirectory()) {
-            for (File file : directory.listFiles()) {
-                deleteDirectory(file);
-            }
+    private static void cleanIndexDirectory() throws IOException {
+        Path indexPath = Paths.get(INDEX_PATH);
+
+        if (Files.exists(indexPath)) {
+            System.out.println("Cleaning existing index directory...");
+            Files.walk(indexPath)
+                 .map(Path::toFile)
+                 .sorted((a, b) -> -a.compareTo(b)) // Delete directories after files
+                 .forEach(File::delete);
+            System.out.println("Index directory cleaned.");
+        } else {
+            System.out.println("No existing index directory found.");
         }
-        Files.delete(directory.toPath());
     }
 
     private static void logSystemUsage(String stage) {
         Runtime runtime = Runtime.getRuntime();
-        long totalMemory = runtime.totalMemory();
-        long freeMemory = runtime.freeMemory();
-        long usedMemory = totalMemory - freeMemory;
-
-        double usedMemoryPercentage = ((double) usedMemory / runtime.maxMemory()) * 100;
-
-        File disk = new File(currentRelativePath.toString());
-        long totalDiskSpace = disk.getTotalSpace();
-        long freeDiskSpace = disk.getFreeSpace();
-        long usedDiskSpace = totalDiskSpace - freeDiskSpace;
-
-        double usedDiskPercentage = ((double) usedDiskSpace / totalDiskSpace) * 100;
+        long usedMemory = runtime.totalMemory() - runtime.freeMemory();
+        long totalMemory = runtime.maxMemory();
+        long diskSpaceUsed = new File(CURRENT_PATH.toString()).getTotalSpace() -
+                             new File(CURRENT_PATH.toString()).getFreeSpace();
 
         DecimalFormat df = new DecimalFormat("#.##");
 
-        System.out.println("\n==== System Usage at " + stage + " ====");
-        System.out.println("RAM Usage: " + df.format((double) usedMemory / (1024 * 1024)) + " MB (" +
-                df.format(usedMemoryPercentage) + "% of max)");
-        System.out.println("Disk Usage: " + df.format((double) usedDiskSpace / (1024 * 1024 * 1024)) + " GB (" +
-                df.format(usedDiskPercentage) + "% of total)");
-        System.out.println("=====================================\n");
+        System.out.printf("%n==== System Usage at %s ====%n", stage);
+        System.out.printf("Memory Usage: %s MB (%.2f%%)%n",
+                df.format(usedMemory / (1024.0 * 1024)),
+                (double) usedMemory / totalMemory * 100);
+        System.out.printf("Disk Usage: %s GB%n", df.format(diskSpaceUsed / (1024.0 * 1024 * 1024)));
+        System.out.println("=============================\n");
     }
 }
