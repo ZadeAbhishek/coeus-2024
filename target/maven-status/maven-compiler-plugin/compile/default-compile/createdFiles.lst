@@ -1,0 +1,16 @@
+com/group_15_2024/QueryLogic$QueryTags.class
+com/group_15_2024/CustomAnalyzer.class
+com/group_15_2024/QueryLogic.class
+com/group_15_2024/documentParser/FBISParser$FBISData.class
+com/group_15_2024/documentParser/FTParser.class
+com/group_15_2024/documentParser/FBISParser$FBISTags.class
+com/group_15_2024/QueryLogic$QueryLib.class
+com/group_15_2024/RankAndAnalyzers.class
+com/group_15_2024/documentParser/FBISParser.class
+com/group_15_2024/MainClass.class
+com/group_15_2024/documentParser/FRParser.class
+com/group_15_2024/documentParser/FTParser$FinTimesObject.class
+com/group_15_2024/documentParser/LATParser.class
+com/group_15_2024/documentParser/FTParser$FinTimesTags.class
+com/group_15_2024/documentParser/FTParser$1.class
+com/group_15_2024/QueryLogic$QueryObject.class
