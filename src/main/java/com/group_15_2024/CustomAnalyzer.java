@@ -23,10 +23,7 @@ public class CustomAnalyzer extends Analyzer {
 
     private static final Path currentRelativePath = Paths.get("").toAbsolutePath();
 
-    // Static stop word set (loaded once)
     private static final CharArraySet STOP_WORDS = loadStopWords();
-
-    // Static synonym map (loaded once)
     private static final SynonymMap SYNONYM_MAP = loadSynonymMap();
 
     @Override
@@ -35,12 +32,11 @@ public class CustomAnalyzer extends Analyzer {
         StandardTokenizer tokenizer = new StandardTokenizer();
         TokenStream tokenStream = tokenizer;
 
-        // Apply filters
         tokenStream = new EnglishPossessiveFilter(tokenStream);
         tokenStream = new ASCIIFoldingFilter(tokenStream);
         tokenStream = new LowerCaseFilter(tokenStream);
         tokenStream = new TrimFilter(tokenStream);
-        tokenStream = new LengthFilter(tokenStream, 2, 20); // Words length between 2 and 20
+        tokenStream = new LengthFilter(tokenStream, 2, 20);
         tokenStream = new StopFilter(tokenStream, STOP_WORDS);
         tokenStream = new PorterStemFilter(tokenStream); // Apply Porter Stemming
 
@@ -51,11 +47,6 @@ public class CustomAnalyzer extends Analyzer {
         return new TokenStreamComponents(tokenizer, tokenStream);
     }
 
-    /**
-     * Loads stop words from a file and returns a CharArraySet.
-     *
-     * @return A thread-safe set of stop words.
-     */
     private static CharArraySet loadStopWords() {
         CharArraySet stopWords = new CharArraySet(100, true);
         File stopWordsFile = new File(currentRelativePath + "/stopwords.txt");
@@ -76,11 +67,6 @@ public class CustomAnalyzer extends Analyzer {
         return stopWords;
     }
 
-    /**
-     * Loads synonyms from a file and returns a SynonymMap.
-     *
-     * @return A SynonymMap for token expansion.
-     */
     private static SynonymMap loadSynonymMap() {
         SynonymMap.Builder builder = new SynonymMap.Builder(true);
         File synonymsFile = new File(currentRelativePath + "/synonyms.txt");
@@ -103,13 +89,6 @@ public class CustomAnalyzer extends Analyzer {
         return null;
     }
 
-    /**
-     * Analyzes a given text and returns a list of tokens after applying the custom analyzer pipeline.
-     *
-     * @param text The text to analyze.
-     * @return A list of processed tokens.
-     * @throws IOException If an error occurs during token stream processing.
-     */
     public List<String> analyze(String text) throws IOException {
         List<String> result = new ArrayList<>();
         try (TokenStream tokenStream = tokenStream("content", text)) {

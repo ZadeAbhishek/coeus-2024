@@ -13,12 +13,6 @@ public class QueryLogic {
     public static class QueryLib {
         private static final Path CURRENT_RELATIVE_PATH = Paths.get("").toAbsolutePath();
         private static final String QUERIES_FILE_PATH = CURRENT_RELATIVE_PATH + "/topics.401-450";
-
-        /**
-         * Loads queries from the file and returns a list of QueryObject instances.
-         *
-         * @return List of QueryObject instances.
-         */
         public static List<QueryObject> loadQueriesFromFile() {
             List<QueryObject> queries = new ArrayList<>();
             QueryObject queryObject = null;
@@ -54,12 +48,6 @@ public class QueryLogic {
             return queries;
         }
 
-        /**
-         * Detects if a line starts with a recognized tag.
-         *
-         * @param line The line to check.
-         * @return The tag if detected, otherwise null.
-         */
         private static String detectTag(String line) {
             for (QueryTags tag : QueryTags.values()) {
                 if (line.startsWith(tag.getTag())) {
@@ -69,13 +57,6 @@ public class QueryLogic {
             return null;
         }
 
-        /**
-         * Populates fields of a QueryObject based on the current tag and line content.
-         *
-         * @param tag         The tag of the current line.
-         * @param line        The content of the line.
-         * @param queryObject The QueryObject being populated.
-         */
         private static void populateQueryFields(String tag, String line, QueryObject queryObject) {
             if (queryObject == null) return;
 

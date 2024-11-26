@@ -20,14 +20,6 @@ import java.util.stream.Stream;
 public class FBISParser {
 
     private static final String[] IGNORE_FILES = {"readchg.txt", "readmefb.txt"};
-
-    /**
-     * Parses and indexes FBIS documents from the specified directory.
-     *
-     * @param fbisDirectory The path to the FBIS directory.
-     * @param writer        The IndexWriter to write parsed documents to.
-     * @throws IOException If there is an issue reading files or directories.
-     */
     public static void loadFBISDocs(String fbisDirectory, IndexWriter writer) throws IOException {
         Path dir = Paths.get(fbisDirectory);
         if (!Files.isDirectory(dir)) {
@@ -52,13 +44,6 @@ public class FBISParser {
             skippedFiles.forEach(System.err::println);
         }
     }
-
-    /**
-     * Determines if a file should be ignored based on its name.
-     *
-     * @param fileName The name of the file.
-     * @return True if the file should be ignored, false otherwise.
-     */
     private static boolean shouldIgnoreFile(String fileName) {
         for (String ignoreFile : IGNORE_FILES) {
             if (fileName.equalsIgnoreCase(ignoreFile)) {
@@ -68,13 +53,6 @@ public class FBISParser {
         return false;
     }
 
-    /**
-     * Processes a single document and writes it to the IndexWriter.
-     *
-     * @param br     The BufferedReader to read the document.
-     * @param writer The IndexWriter to write the parsed document to.
-     * @throws IOException If there is an issue reading or writing the document.
-     */
     private static void processDocument(BufferedReader br, IndexWriter writer) throws IOException {
         String fileContent = readFile(br);
         org.jsoup.nodes.Document document = Jsoup.parse(fileContent);
@@ -106,20 +84,13 @@ public class FBISParser {
             }
         }
 
-        writer.commit(); // Final commit
+        writer.commit();
         if (!skippedDocs.isEmpty()) {
             System.err.println("Skipped documents:");
             skippedDocs.forEach(System.err::println);
         }
     }
 
-    /**
-     * Extracts and trims data from an element based on the given tag.
-     *
-     * @param doc The element to extract data from.
-     * @param tag The FBISTags to look for.
-     * @return The trimmed data, or null if the tag is not found.
-     */
     private static String trimData(Element doc, FBISTags tag) {
         Elements elements = doc.getElementsByTag(tag.getTagName());
         if (elements.isEmpty()) {
@@ -131,12 +102,6 @@ public class FBISParser {
         return data != null ? data.trim() : null;
     }
 
-    /**
-     * Removes nested tags from the specified elements.
-     *
-     * @param elements The elements to process.
-     * @param currTag  The current FBISTags being processed.
-     */
     private static void removeNestedTags(Elements elements, FBISTags currTag) {
         for (FBISTags tag : FBISTags.values()) {
             if (!tag.equals(currTag)) {
@@ -145,12 +110,6 @@ public class FBISParser {
         }
     }
 
-    /**
-     * Creates a Lucene Document from the extracted FBIS data.
-     *
-     * @param fbisData The FBIS data to use.
-     * @return A Lucene Document containing the parsed fields.
-     */
     private static Document createFBISDocument(FBISData fbisData) {
         Document document = new Document();
         document.add(new StringField("docno", fbisData.getDocNum(), Field.Store.YES));
@@ -163,13 +122,6 @@ public class FBISParser {
         return document;
     }
 
-    /**
-     * Reads the entire content of a file using a BufferedReader.
-     *
-     * @param br The BufferedReader to read from.
-     * @return The content of the file as a String.
-     * @throws IOException If there is an issue reading the file.
-     */
     private static String readFile(BufferedReader br) throws IOException {
         StringBuilder sb = new StringBuilder();
         String line;
@@ -179,9 +131,6 @@ public class FBISParser {
         return sb.toString();
     }
 
-    /**
-     * Class representing FBIS data.
-     */
     static class FBISData {
         private String docNum, ti, text;
 
@@ -210,9 +159,6 @@ public class FBISParser {
         }
     }
 
-    /**
-     * Enum representing FBIS tags.
-     */
     enum FBISTags {
         HEADER, TEXT, ABS, AU, DATE1, DOC, DOCNO, H1, H2, H3, H4, H5, H6, H7, H8, HT, TR, TXT5, TI;
 
