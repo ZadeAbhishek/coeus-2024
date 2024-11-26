@@ -20,5 +20,5 @@ make quicktest
 ```
 ### Run 
 ```bash
-  ./run.sh BM25 CUSTOM 
+  ./run.sh BM25 CUSTOM ./qrels
 ```
