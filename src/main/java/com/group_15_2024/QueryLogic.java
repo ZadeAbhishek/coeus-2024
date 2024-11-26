@@ -31,23 +31,17 @@ public class QueryLogic {
                     String detectedTag = detectTag(line.trim());
 
                     if (detectedTag != null) {
-                        switch (detectedTag) {
-                            case "<top>":
-                                queryObject = new QueryObject();
-                                break;
-
-                            case "</top>":
-                                if (queryObject != null) {
-                                    queries.add(queryObject);
-                                }
-                                queryObject = null;
-                                currentTag = null;
-                                break;
-
-                            default:
-                                currentTag = detectedTag;
-                                populateQueryFields(currentTag, line, queryObject);
-                                break;
+                        if (detectedTag.equals(QueryTags.TOP_START.getTag())) {
+                            queryObject = new QueryObject();
+                        } else if (detectedTag.equals(QueryTags.TOP_END.getTag())) {
+                            if (queryObject != null) {
+                                queries.add(queryObject);
+                            }
+                            queryObject = null;
+                            currentTag = null;
+                        } else {
+                            currentTag = detectedTag;
+                            populateQueryFields(currentTag, line, queryObject);
                         }
                     } else if (currentTag != null && queryObject != null) {
                         populateQueryFields(currentTag, line, queryObject);
@@ -105,6 +99,19 @@ public class QueryLogic {
                     break;
 
                 default:
+                    if (tag != null) {
+                        switch (tag) {
+                            case "<title>":
+                                queryObject.appendTitle(line.trim());
+                                break;
+                            case "<desc> Description:":
+                                queryObject.appendDescription(line.trim());
+                                break;
+                            case "<narr> Narrative:":
+                                queryObject.appendNarrative(line.trim());
+                                break;
+                        }
+                    }
                     break;
             }
         }
