@@ -18,7 +18,6 @@ import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.QueryParser;
-import org.apache.lucene.index.Term;
 
 import java.io.File;
 import java.io.IOException;
@@ -132,45 +131,52 @@ public class MainClass {
 
     private static void processQuery(QueryObject queryData, IndexSearcher searcher, QueryParser parser, PrintWriter writer) throws ParseException, IOException {
         BooleanQuery.Builder booleanQuery = new BooleanQuery.Builder();
-
+    
         List<String> splitNarrative = splitNarrIntoRelNotRel(queryData.getNarrative());
         String relevantNarr = splitNarrative.get(0).trim();
-
+    
         System.out.println("Processing Query ID: " + queryData.getQueryNum());
-
+    
         if (!queryData.getTitle().trim().isEmpty()) {
             addQueriesToBooleanQuery(booleanQuery, parser, "headline", queryData.getTitle(), 3.5f, 4f);
         } else {
             System.out.println("Title is empty for Query ID: " + queryData.getQueryNum());
         }
-
+    
         if (!queryData.getDescription().trim().isEmpty()) {
             addQueriesToBooleanQuery(booleanQuery, parser, "text", queryData.getDescription(), 2.5f, 3.0f);
         } else {
             System.out.println("Description is empty for Query ID: " + queryData.getQueryNum());
         }
-
+    
         if (!relevantNarr.isEmpty()) {
             addQueriesToBooleanQuery(booleanQuery, parser, "text", relevantNarr, 2.0f, 2.5f);
         } else {
             System.out.println("Relevant Narrative is empty for Query ID: " + queryData.getQueryNum());
         }
-
+    
         Query finalQuery = booleanQuery.build();
-
+    
         TopDocs results = searcher.search(finalQuery, MAX_RESULTS);
-
-        int rank = 0;
+    
+        // Retrieve Analyzer and Similarity type dynamically
+        String analyzerName = analyzer.getClass().getSimpleName().replace("Analyzer", "");
+        String similarityName = searcher.getSimilarity().getClass().getSimpleName().replace("Similarity", "");
+        String rankingModel = analyzerName + similarityName;
+    
+        int rank = 1; // Start rank at 1 to match the desired output
         for (ScoreDoc scoreDoc : results.scoreDocs) {
             Document doc = searcher.doc(scoreDoc.doc);
             String docno = doc.get("docno");
-
+    
             if (docno == null) {
                 System.err.println("Skipping document without docno.");
                 continue;
             }
-
-            writer.printf("%s 0 %s %d %.6f 0%n", queryData.getQueryNum(), docno, rank, scoreDoc.score);
+    
+            // Dynamically include the combined analyzer and similarity type in the output
+            writer.printf("%s Q0 %s %d %.6f %s%n",
+                          queryData.getQueryNum(), docno, rank, scoreDoc.score, rankingModel);
             rank++;
         }
     }
